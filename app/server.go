@@ -1,7 +1,9 @@
 package main
 
 import (
+	"flag"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"strings"
@@ -11,6 +13,8 @@ const (
 	Response200 = "HTTP/1.1 200 OK\r\n\r\n"
 	Response404 = "HTTP/1.1 404 Not Found\r\n\r\n"
 )
+
+var directory string
 
 type HeaderMap map[string]string
 
@@ -67,6 +71,35 @@ func handleConnection(conn net.Conn) {
 			fmt.Println("Error writing to connection: ", err.Error())
 			os.Exit(1)
 		}
+	} else if strings.HasPrefix(path, "/files") {
+		fileName := strings.TrimPrefix(path, "/files/")
+		filePath := fmt.Sprintf("%s/%s", directory, fileName)
+		file, err := os.Open(filePath)
+		if err != nil {
+			if os.IsNotExist(err) {
+				_, err = conn.Write([]byte(Response404))
+				if err != nil {
+					fmt.Println("Error writing to client: ", err.Error())
+					os.Exit(1)
+				}
+			}
+			fmt.Println("Error opening file for reading: ", err.Error())
+			os.Exit(1)
+		}
+		fileContent, err := io.ReadAll(file)
+		if err != nil {
+			fmt.Println("Error reading from file: ", err.Error())
+			os.Exit(1)
+		}
+		response := "HTTP/1.1 200 OK\r\n"
+		response += "Content-Type: application/octet-stream\r\n"
+		response += fmt.Sprintf("Content-Length: %d\r\n", len(string(fileContent)))
+		response += fmt.Sprintf("%s\r\n", string(fileContent))
+		_, err = conn.Write([]byte(response))
+		if err != nil {
+			fmt.Println("Error writing to connection: ", err.Error())
+			os.Exit(1)
+		}
 	} else {
 		_, err = conn.Write([]byte(Response404))
 		if err != nil {
@@ -77,6 +110,8 @@ func handleConnection(conn net.Conn) {
 }
 
 func main() {
+	directory = *flag.String("directory", "", "")
+	flag.Parse()
 	fmt.Println("Logs from your program will appear here!")
 	l, err := net.Listen("tcp", "0.0.0.0:4221")
 	if err != nil {
