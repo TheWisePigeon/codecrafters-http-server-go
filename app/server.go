@@ -41,10 +41,24 @@ func main() {
 			fmt.Println("Error writing to connection: ", err.Error())
 			os.Exit(1)
 		}
+	} else if strings.HasPrefix(path, "/echo") {
+		randomStr, _ := strings.CutPrefix(path, "/echo/")
+		response := "HTTP/1.1 200 OK\r\n"
+		response += "Content-Type: text/plain\r\n"
+		response += fmt.Sprintf("Content-Length: %d\r\n", len(randomStr))
+		response += "\r\n"
+		response += fmt.Sprintf("%s\r\n", randomStr)
+		_, err := conn.Write([]byte(response))
+		if err != nil {
+			fmt.Println("Error writing to connection: ", err.Error())
+			os.Exit(1)
+		}
+	} else {
+		_, err = conn.Write([]byte(Response404))
+		if err != nil {
+			fmt.Println("Error writing to connection: ", err.Error())
+			os.Exit(1)
+		}
 	}
-	_, err = conn.Write([]byte(Response404))
-	if err != nil {
-		fmt.Println("Error writing to connection: ", err.Error())
-		os.Exit(1)
-	}
+	conn.Close()
 }
