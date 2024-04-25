@@ -4,6 +4,12 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strings"
+)
+
+const (
+	Response200 = "HTTP/1.1 200 OK\r\n\r\n"
+	Response404 = "HTTP/1.1 404 Not Found\r\n\r\n"
 )
 
 func main() {
@@ -20,10 +26,25 @@ func main() {
 		fmt.Println("Error accepting connection: ", err.Error())
 		os.Exit(1)
 	}
-	response := "HTTP/1.1 200 OK\r\n\r\n"
-	_, err = conn.Write([]byte(response))
+	data := make([]byte, 1024)
+	_, err = conn.Read(data)
 	if err != nil {
-		fmt.Println("Error writing to client: ", err.Error())
+		fmt.Println("Error reading from connection: ", err.Error())
+		os.Exit(1)
+	}
+	parts := strings.Split(string(data), "\r\n")
+	startLine := parts[0]
+	path := strings.Split(startLine, " ")[1]
+	if path == "/" {
+		_, err := conn.Write([]byte(Response200))
+		if err != nil {
+			fmt.Println("Error writing to connection: ", err.Error())
+			os.Exit(1)
+		}
+	}
+	_, err = conn.Write([]byte(Response404))
+	if err != nil {
+		fmt.Println("Error writing to connection: ", err.Error())
 		os.Exit(1)
 	}
 }
