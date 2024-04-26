@@ -98,32 +98,60 @@ func handleConnection(conn net.Conn) {
 	if strings.HasPrefix(req.Path, "/files") {
 		fileName := strings.TrimPrefix(req.Path, "/files/")
 		filePath := fmt.Sprintf("%s/%s", dir, fileName)
-		file, err := os.Open(filePath)
-		if err != nil {
-			if os.IsNotExist(err) {
-				_, err = conn.Write([]byte(Response404))
-				if err != nil {
-					fmt.Println("Error writing to client: ", err.Error())
+		switch req.Method {
+		case "GET":
+			file, err := os.Open(filePath)
+			if err != nil {
+				if os.IsNotExist(err) {
+					_, err = conn.Write([]byte(Response404))
+					if err != nil {
+						fmt.Println("Error writing to client: ", err.Error())
+					}
+					return
 				}
+				fmt.Println("Error opening file for reading: ", err.Error())
 				return
 			}
-			fmt.Println("Error opening file for reading: ", err.Error())
+			fileContent, err := io.ReadAll(file)
+			if err != nil {
+				fmt.Println("Error reading from file: ", err.Error())
+				return
+			}
+			response := "HTTP/1.1 200 OK\r\n"
+			response += "Content-Type: application/octet-stream\r\n"
+			response += fmt.Sprintf("Content-Length: %d\r\n", len(string(fileContent)))
+			response += fmt.Sprintf("\r\n%s\r\n", string(fileContent))
+			_, err = conn.Write([]byte(response))
+			if err != nil {
+				fmt.Println("Error writing to connection: ", err.Error())
+			}
+			return
+		case "POST":
+			file, err := os.Create(filePath)
+			if err != nil {
+				fmt.Println("Error creating file: ", err.Error())
+				return
+			}
+			defer file.Close()
+			var buf bytes.Buffer
+			for _, byteData := range req.Body {
+				if byteData == 0 {
+					break
+				}
+				buf.WriteByte(byteData)
+			}
+			_, err = buf.WriteTo(file)
+			if err != nil {
+				fmt.Println("Error writing content to file: ", err.Error())
+				return
+			}
+			response := "HTTP/1.1 201 Created\r\n\r\n"
+			_, err = conn.Write([]byte(response))
+			if err != nil {
+				fmt.Println("Error writing to connection: ", err.Error())
+			}
 			return
 		}
-		fileContent, err := io.ReadAll(file)
-		if err != nil {
-			fmt.Println("Error reading from file: ", err.Error())
-			return
-		}
-		response := "HTTP/1.1 200 OK\r\n"
-		response += "Content-Type: application/octet-stream\r\n"
-		response += fmt.Sprintf("Content-Length: %d\r\n", len(string(fileContent)))
-		response += fmt.Sprintf("\r\n%s\r\n", string(fileContent))
-		_, err = conn.Write([]byte(response))
-		if err != nil {
-			fmt.Println("Error writing to connection: ", err.Error())
-		}
-		return
 	}
 	_, err = conn.Write([]byte(Response404))
 	if err != nil {
